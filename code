@@ -1,0 +1,230 @@
+# IDEAL SCENARIO distributions
+
+```{r}
+# Simulate data for two groups
+set.seed(123)
+n <- 100
+pass <- data.frame(
+  group = "Pass",
+  absence_rate = rnorm(n, mean = 20, sd = 3)
+)
+
+fail <- data.frame(
+  group = "Fail",
+  absence_rate = rnorm(n, mean = 40, sd = 3)
+)
+
+# Combine the datasets
+df <- bind_rows(pass, fail)
+
+
+# Create the plot
+ggplot(df, aes(x = absence_rate, fill = group, color = group)) +
+  geom_density(alpha = 0.5, size = 1) +
+  geom_vline(xintercept = 30, linetype = "dashed", color = "black", size = 1) +
+  #annotate("text", x = 30, y = 0.02, label = "Absence Threshold", angle = 90, vjust = -0.5, hjust = -1, size = 4) +
+ # annotate("text", x = 20, y = 0.04, label = "Correct Rejection\n(True Negative)", size = 4, hjust = 0.5) +
+#  annotate("text", x = 40, y = 0.04, label = "Hit\n(True Positive)", size = 4, hjust = 0.5) +
+  scale_fill_manual(values = c("Pass" = "skyblue", "Fail" = "salmon")) +
+  scale_color_manual(values = c("Pass" = "skyblue", "Fail" = "salmon")) +
+  labs(
+    title = "Figure 1a. Ideal Classification of Absenteeism Risk",
+    x = NULL,
+    y = "Probability",
+    fill = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+  #  axis.ticks = element_blank(),
+    axis.text = element_blank(),
+   # panel.grid = element_blank(),
+    legend.position = "none",
+       panel.grid = element_blank(),        # Removes all grid lines
+    panel.border = element_blank(),      # Removes panel border
+    panel.background = element_blank(),  # Removes panel background
+    plot.background = element_blank(),   # Removes plot background
+   axis.line.y = element_line(color = "black"),  
+   axis.line.x = element_line(color = "black")  
+  )
+```
+
+```{r}
+
+# Simulate data for two groups with equal spread and overlap
+set.seed(123)
+n <- 1000
+pass <- data.frame(
+  group = "Pass",
+  absence_rate = rnorm(n, mean = 25, sd = 5)
+)
+
+fail <- data.frame(
+  group = "Fail",
+  absence_rate = rnorm(n, mean = 35, sd = 5)
+)
+
+# Combine the datasets
+df <- bind_rows(pass, fail)
+
+# Create the plot
+ggplot(df, aes(x = absence_rate, fill = group, color = group)) +
+  geom_density(alpha = 0.5, size = 1) +
+  geom_vline(xintercept = 30, linetype = "dashed", color = "black", size = 1) +
+  scale_fill_manual(values = c("Pass" = "skyblue", "Fail" = "salmon")) +
+  scale_color_manual(values = c("Pass" = "skyblue", "Fail" = "salmon")) +
+  labs(
+    title = "Figure 1b. Overlapping Distributions",
+    x = NULL,
+    y = "Probability",
+    fill = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    legend.position = "none",
+    axis.line.y = element_line(color = "black"),
+    axis.line.x = element_line(color = "black")
+  )
+```
+
+```{r}
+
+# Create the plot
+ggplot(df, aes(x = absence_rate, fill = group, color = group)) +
+  geom_density(alpha = 0.5, size = 1) +
+  geom_vline(xintercept = 25, linetype = "dashed", color = "black", size = 1) +
+  scale_fill_manual(values = c("Pass" = "skyblue", "Fail" = "salmon")) +
+  scale_color_manual(values = c("Pass" = "skyblue", "Fail" = "salmon")) +
+  labs(
+    title = "Figure 1c. Many Hits, Many False Alarms",
+    x = NULL,
+    y = "Probability",
+    fill = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    legend.position = "none",
+    axis.line.y = element_line(color = "black"),
+    axis.line.x = element_line(color = "black")
+  )
+
+# Create the plot
+ggplot(df, aes(x = absence_rate, fill = group, color = group)) +
+  geom_density(alpha = 0.5, size = 1) +
+  geom_vline(xintercept = 35, linetype = "dashed", color = "black", size = 1) +
+  scale_fill_manual(values = c("Pass" = "skyblue", "Fail" = "salmon")) +
+  scale_color_manual(values = c("Pass" = "skyblue", "Fail" = "salmon")) +
+  labs(
+    title = "Figure 1d. Less Hits, Less False Alarms",
+    x = NULL,
+    y = "Probability",
+    fill = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    legend.position = "none",
+    axis.line.y = element_line(color = "black"),
+    axis.line.x = element_line(color = "black")
+  )
+```
+
+# Hypothetical ROC Curves
+
+```{r, fig.height = 5, fig.width=5}
+
+# Create data for two classifiers
+roc_data <- data.frame(
+  FPR = rep(c(0.0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0), 2),
+  TPR = c(0.0, 0.4, 0.6, 0.75, 0.85, 0.92, 0.97, 1.0,   # Stronger
+          0.0, 0.2, 0.35, 0.5, 0.6, 0.7, 0.85, 1.0),     # Weaker
+  Model = rep(c("Stronger Classifier", "Weaker Classifier"), each = 8))
+
+# Create the ROC plot
+ggplot(roc_data, aes(x = FPR, y = TPR, color = Model, linetype = Model)) +
+  geom_line(size = 1.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black", size = 0.8) +
+  labs(
+    title = "Hypothetical ROC Curves",
+    x = "False Positive Rate",
+    y = "True Positive Rate"
+  ) +
+  theme_minimal(base_size = 14) +
+  scale_color_manual(values = c("Stronger Classifier" = "goldenrod2", "Weaker Classifier" = "orchid3")) +
+  scale_linetype_manual(values = c("Stronger Classifier" = "solid", "Weaker Classifier" = "solid")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.1), limits = c(0, 1)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1), limits = c(0, 1)) +
+  theme(legend.title = element_blank()) +
+  theme(
+  #  axis.text = element_blank(),
+  #  axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    legend.position = "none",
+    axis.line.y = element_line(color = "black"),
+    axis.line.x = element_line(color = "black"))
+```
+
+```{r}
+# Youden's J
+# Your ROC data
+roc_data <- data.frame(
+  FPR = rep(c(0.0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0)),
+  TPR = c(0.0, 0.4, 0.6, 0.75, 0.85, 0.92, 0.97, 1.0),
+  Model = "Stronger Classifier")     
+
+# Calculate Youden's J for Stronger Classifier
+youden_point <- roc_data %>%
+  filter(Model == "Stronger Classifier") %>%
+  mutate(J = TPR - FPR) %>%
+  slice_max(order_by = J, n = 1)
+
+# Create the ROC plot with Youden’s J line
+ggplot(roc_data, aes(x = FPR, y = TPR, color = Model, linetype = Model)) +
+  geom_line(size = 1.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black", size = 0.8) +
+  
+  # Add Youden’s J vertical line
+  geom_segment(data = youden_point,
+               aes(x = FPR, xend = FPR,
+                   y = FPR, yend = TPR),
+               color = "black", arrow = arrow(length = unit(0.2, "inches"))) +
+  
+  # Label the point
+  geom_point(data = youden_point, aes(x = FPR, y = TPR), size = 3, color = "red") +
+  annotate("text", x = youden_point$FPR + 0.05, y = (youden_point$TPR + youden_point$FPR)/2,
+           label = "Youden's J", hjust = 0, vjust = -0.5) +
+  
+  labs(
+    title = "Hypothetical ROC Curves with Youden's J",
+    x = "False Positive Rate",
+    y = "True Positive Rate"
+  ) +
+  theme_minimal(base_size = 14) +
+  scale_color_manual(values = c("Stronger Classifier" = "goldenrod2")) +
+  scale_linetype_manual(values = c("Stronger Classifier" = "solid")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.1), limits = c(0, 1)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1), limits = c(0, 1)) +
+  theme(legend.title = element_blank(),
+        panel.grid = element_blank(),
+        legend.position = "none",
+        axis.line = element_line(color = "black"))
+```
