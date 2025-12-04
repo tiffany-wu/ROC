@@ -1,0 +1,102 @@
+# -----------------------------
+# Settings
+# -----------------------------
+years   <- 0:9                     # Years to analyze-- our data was organized by follow-up year
+grades  <- 3:8                     # Grades to analyze
+y_stem  <- "mmcas_perf_level"      # Outcome variable-- it is for math in this sample code but can be replaced with any test outcome
+
+# Your helper to pick column with/without _0
+col_or_alt <- function(df, base) {
+  with0  <- paste0(base, "_0")
+  if (with0 %in% names(df)) return(with0)
+  if (base %in% names(df))  return(base)
+  return(NA_character_)
+}
+
+# -----------------------------
+# Core runner for one grade
+# -----------------------------
+run_delong_for_grade <- function(outcome_grade, data = data) {
+  yvar <- paste0(y_stem, outcome_grade)
+  if (!yvar %in% names(data)) {
+    warning("Outcome variable ", yvar, " not found. Skipping grade ", outcome_grade)
+    return(tibble())
+  }
+
+  # 1 = NOT meeting expectations
+  y_nonpass <- as.integer(data[[yvar]] == 0)
+
+  # A small wrapper to run paired DeLong test for two predictors
+  run_delong <- function(fy, name1, x1, name2, x2) {
+    if (is.na(x1) || is.na(x2)) return(NULL)
+    x1v <- data[[x1]]; x2v <- data[[x2]]
+    if (is.null(x1v) || is.null(x2v)) return(NULL)
+
+    keep <- is.finite(x1v) & is.finite(x2v) & !is.na(y_nonpass)
+    if (sum(keep) < 10) return(NULL)
+
+    roc1 <- tryCatch(pROC::roc(y_nonpass[keep], x1v[keep], direction = "<", quiet = TRUE), error = function(e) NULL)
+    roc2 <- tryCatch(pROC::roc(y_nonpass[keep], x2v[keep], direction = "<", quiet = TRUE), error = function(e) NULL)
+    if (is.null(roc1) || is.null(roc2)) return(NULL)
+
+    test <- tryCatch(pROC::roc.test(roc1, roc2, method = "delong", paired = TRUE), error = function(e) NULL)
+    if (is.null(test)) return(NULL)
+
+    tibble(
+      FY         = paste0("FY", fy),
+      comparison = paste(name1, "vs", name2),
+      n_paired   = sum(keep),
+      AUC_1      = as.numeric(pROC::auc(roc1)),
+      AUC_2      = as.numeric(pROC::auc(roc2)),
+      AUC_diff   = as.numeric(pROC::auc(roc1) - pROC::auc(roc2)),
+      CI_lower   = unname(test$conf.int[1]),
+      CI_upper   = unname(test$conf.int[2]),
+      p_value    = unname(test$p.value)
+    )
+  }
+
+  # Loop across FYs and run the six comparisons you set up
+  results <- map_dfr(years, function(fy) {
+    total_rate_col <- col_or_alt(data, paste0("totalabsence_rate_fy", fy))
+    ux_rate_col    <- col_or_alt(data, paste0("uxabsence_rate_fy",    fy))
+    exc_rate_col   <- col_or_alt(data, paste0("excabsence_rate_fy",   fy))
+
+    ndays_total_col <- col_or_alt(data, paste0("ndays_totalabsent_fy", fy))
+    ndays_ux_col    <- col_or_alt(data, paste0("ndays_uxabsent_fy",    fy))
+    ndays_exc_col   <- col_or_alt(data, paste0("ndays_excabsent_fy",   fy))
+
+    bind_rows(
+      run_delong(fy, "Total rate",     total_rate_col, "Unexcused rate", ux_rate_col),
+      run_delong(fy, "Total rate",     total_rate_col, "Excused rate",   exc_rate_col),
+      run_delong(fy, "Unexcused rate", ux_rate_col,    "Excused rate",   exc_rate_col),
+
+      run_delong(fy, "Days total",     ndays_total_col, "Total rate",     total_rate_col),
+      run_delong(fy, "Days unexcused", ndays_ux_col,    "Unexcused rate", ux_rate_col),
+      run_delong(fy, "Days excused",   ndays_exc_col,   "Excused rate",   exc_rate_col)
+    )
+  })
+
+  results %>%
+    mutate(
+      Grade = paste0("Grade ", outcome_grade),
+      p_val_formatted = case_when(
+        p_value < 0.0001 ~ "<0.0001",
+        p_value < 0.001  ~ "<0.001",
+        p_value < 0.01   ~ "<0.01",
+        p_value < 0.05   ~ "<0.05",
+        TRUE             ~ as.character(round(p_value, 3))
+      )
+    ) %>%
+    arrange(FY, comparison)
+}
+
+# -----------------------------
+# Run for all grades & export
+# -----------------------------
+delong_by_grade <- setNames(
+  lapply(grades, run_delong_for_grade, data = data),
+  paste0("Grade ", grades, " Math")
+)
+
+# Write to Excel (one sheet per grade)
+write.xlsx(delong_by_grade, file = "file_name.xlsx", rowNames = FALSE)
