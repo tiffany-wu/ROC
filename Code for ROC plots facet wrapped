@@ -1,0 +1,138 @@
+years <- 0:9
+var_types <- c("ndays_totalabsent", "ndays_uxabsent", "ndays_excabsent",
+               "totalabsence_rate", "uxabsence_rate", "excabsence_rate")
+
+label_map <- c(
+  ndays_totalabsent = "Ndays Total Absent",
+  ndays_uxabsent    = "Ndays UXabsent",
+  ndays_excabsent   = "Ndays Excused Absent",
+  totalabsence_rate = "Total Absence Rate",
+  uxabsence_rate    = "Unexcused Absence Rate",
+  excabsence_rate   = "Excused Absence Rate"
+)
+
+fy_labels <- c(
+  "FY0" = "Pre-K",
+  "FY1" = "Kindergarten",
+  "FY2" = "1st Grade",
+  "FY3" = "2nd Grade",
+  "FY4" = "3rd Grade",
+  "FY5" = "4th Grade",
+  "FY6" = "5th Grade",
+  "FY7" = "6th Grade",
+  "FY8" = "7th Grade",
+  "FY9" = "8th Grade"
+)
+
+custom_colors <- c(
+  "Ndays UXabsent"        = "orchid4",
+  "Unexcused Absence Rate"= "orchid2",
+  "Excused Absence Rate"  = "cadetblue2",
+  "Ndays Excused Absent"  = "darkcyan",
+  "Total Absence Rate"    = "goldenrod1",
+  "Ndays Total Absent"    = "goldenrod4"
+)
+
+custom_linetypes <- c(
+  "Ndays UXabsent"        = "dotted",
+  "Unexcused Absence Rate"= "solid",
+  "Excused Absence Rate"  = "solid",
+  "Ndays Excused Absent"  = "dotted",
+  "Total Absence Rate"    = "solid",
+  "Ndays Total Absent"    = "dotted"
+)
+
+legend_breaks <- c(
+  "Total Absence Rate",
+  "Ndays Total Absent",
+  "Unexcused Absence Rate",
+  "Ndays UXabsent",
+  "Excused Absence Rate",
+  "Ndays Excused Absent"
+)
+
+legend_labels <- c(
+  "Absence Rate (Total)",
+  "Number of Days\nAbsent (Total)",
+  "Absence Rate (Unexcused)",
+  "Number of Days\nAbsent (Unexcused)",
+  "Absence Rate (Excused)",
+  "Number of Days\nAbsent (Excused)"
+)
+
+
+# ---------------------------------------------------
+# Build ROC df for a given outcome grade
+# ---------------------------------------------------
+build_roc_df_for_grade <- function(outcome_grade, data = data) {
+  yvar <- paste0("mmcas_perf_level", outcome_grade)
+  if (!yvar %in% names(data)) {
+    warning("Outcome variable ", yvar, " not found.")
+    return(tibble())
+  }
+  y_nonpass <- as.integer(data[[yvar]] == 0)  
+
+  map_dfr(years, function(fy) {
+    map_dfr(var_types, function(vname) {
+      var_full <- paste0(vname, "_fy", fy, "_0")
+      if (!var_full %in% names(data)) return(NULL)
+
+      x <- data[[var_full]]
+      if (all(is.na(x)) || dplyr::n_distinct(x, na.rm = TRUE) < 2) return(NULL)
+
+      tryCatch({
+        roc_obj <- pROC::roc(y_nonpass, x, direction = "<", quiet = TRUE)
+
+        tibble::tibble(
+          FPR   = 1 - roc_obj$specificities,
+          TPR   = roc_obj$sensitivities,
+          Label = label_map[[vname]],
+          AUC   = round(pROC::auc(roc_obj), 3),
+          FY    = paste0("FY", fy),
+          OutcomeGrade = paste0("Grade ", outcome_grade)
+        )
+      }, error = function(e) NULL)
+    })
+  })
+}
+
+# ----------------------------------------------------
+# Plot a facet-wrapped ROC for a given grade
+# ----------------------------------------------------
+plot_roc_facets_for_grade <- function(roc_df_grade, outcome_grade) {
+  ggplot(roc_df_grade, aes(x = FPR, y = TPR, color = Label, linetype = Label)) +
+    geom_line(size = 1.2) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed",
+                color = "gray60", size = 0.7) +
+    scale_color_manual(values = custom_colors,
+                       breaks = legend_breaks,
+                       labels = legend_labels) +
+    scale_linetype_manual(values = custom_linetypes,
+                          breaks = legend_breaks,
+                          labels = legend_labels) +
+    labs(
+      title = paste0("ROC Curves for Grade ", outcome_grade, " Math Outcomes"),
+      x = "False Positive Rate (1 - Specificity)",
+      y = "True Positive Rate (Sensitivity)",
+      color = "Absence Variable",
+      linetype = "Absence Variable"
+    ) +
+    facet_wrap(~FY, ncol = 5, labeller = as_labeller(fy_labels)) +
+    theme_minimal(base_size = 14) +
+    theme(legend.position = "bottom") +
+    coord_equal(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+# ------------------------------------------------------------
+# Build & plot for grades 3–8
+# ------------------------------------------------------------
+grades_to_run <- 3:8
+roc_list <- lapply(grades_to_run, function(g) build_roc_df_for_grade(g, data))
+
+for (i in seq_along(grades_to_run)) {
+  g <- grades_to_run[i]
+  roc_df_g <- roc_list[[i]]
+  if (nrow(roc_df_g) > 0) {
+    print(plot_roc_facets_for_grade(roc_df_g, g))
+  }
+}
