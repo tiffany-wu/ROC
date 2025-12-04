@@ -1,0 +1,76 @@
+# -----------------------------
+# Helper to build threshold grid
+# -----------------------------
+make_thresh_df <- function(x, y) {
+  # x: numeric predictor; y: binary {0,1} 
+  keep <- is.finite(x) & !is.na(y)
+  if (sum(keep) < 10) return(tibble(threshold = numeric(0), sensitivity = numeric(0), specificity = numeric(0), J = numeric(0)))
+
+  roc_obj <- pROC::roc(y[keep], x[keep], direction = "<", quiet = TRUE)
+  coords_df <- as.data.frame(
+    pROC::coords(roc_obj, "all", ret = c("threshold", "sensitivity", "specificity"), transpose = FALSE)
+  )
+
+  coords_df %>%
+    mutate(
+      threshold  = as.numeric(threshold),
+      sensitivity = as.numeric(sensitivity),
+      specificity = as.numeric(specificity),
+      J = sensitivity + specificity - 1
+    ) %>%
+    filter(is.finite(threshold))
+}
+
+# ------------------------------------------------------
+# Helper function to compute best Youden's J for one var
+# ------------------------------------------------------
+get_bestJ <- function(y_nonpass, var_name, df, subject, grade_outcome) {
+  if (!var_name %in% names(df)) return(NULL)
+  x <- df[[var_name]]
+  if (all(!is.finite(x))) return(NULL)
+
+  df_thresh <- make_thresh_df(x, y_nonpass)
+  if (nrow(df_thresh) == 0) return(NULL)
+
+  bestJ <- df_thresh %>% arrange(desc(J), threshold) %>% slice(1)
+
+  tibble(
+    subject       = subject,
+    outcome_grade = grade_outcome,
+    predictor     = var_name,
+    threshold     = bestJ$threshold,
+    J_value       = bestJ$J
+  )
+}
+
+# ------------------------------------------------------
+# Wrapper to run FY0–FY9 predictors for one outcome grade
+# ------------------------------------------------------
+run_youden_for_grade <- function(df, grade_outcome) {
+  # Outcomes (1 = non-passer)
+  mm <- paste0("mmcas_perf_level", grade_outcome)
+  ee <- paste0("emcas_perf_level", grade_outcome)
+  if (!(mm %in% names(df)) && !(ee %in% names(df))) return(tibble())
+
+  y_math <- if (mm %in% names(df)) as.integer(df[[mm]] == 0) else rep(NA_integer_, nrow(df))
+  y_ela  <- if (ee %in% names(df)) as.integer(df[[ee]] == 0) else rep(NA_integer_, nrow(df))
+
+  map_dfr(0:9, function(fy) {
+    var_name <- paste0("ndays_totalabsent_fy", fy, "_0")
+    bind_rows(
+      if (!all(is.na(y_math))) get_bestJ(y_math, var_name, df, "Math", grade_outcome) else NULL,
+      if (!all(is.na(y_ela)))  get_bestJ(y_ela,  var_name, df, "ELA",  grade_outcome) else NULL
+    )
+  })
+}
+
+# ------------------------------------------------------
+# Run for grades 3–8 and tidy
+# ------------------------------------------------------
+youden_results_all <- map_dfr(3:8, ~run_youden_for_grade(data, .x)) %>%
+  mutate(
+    FY = sub(".*fy(\\d+).*", "FY\\1", predictor),
+    subject_outcome = paste0(subject, " (Grade ", outcome_grade, " outcome)")
+  ) %>%
+  select(FY, subject_outcome, predictor, threshold, J_value) %>%
+  arrange(subject_outcome, FY)
